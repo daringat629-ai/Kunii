@@ -1,6 +1,6 @@
 name: Build from zip
 
-# Репозиторий содержит только архив kuni-marin-integrated_upgraded.zip: сценарий сам распаковывает его,
+# Репозиторий содержит архив kuni-marin-integrated*.zip: сценарий сам берёт последний загруженный, распаковывает его,
 # проверяет «Нулевое ядро» и собирает бота. Запуск: автоматически при загрузке архива или вручную (Run workflow).
 on:
   workflow_dispatch:
@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -28,8 +30,10 @@ jobs:
           node-version: '20'
       - name: Unpack the archive
         run: |
-          ZIP=$(ls kuni-marin-integrated*.zip | head -n 1)
+          # берём архив, который загружен в репозиторий последним (имена с номерами и пробелами не мешают)
+          ZIP=$(for f in kuni-marin-integrated*.zip; do printf '%s\t%s\n' "$(git log -1 --format=%ct -- "$f")" "$f"; done | sort -n | tail -n 1 | cut -f2-)
           echo "Archive: $ZIP"
+          ls -la kuni-marin-integrated*.zip
           mkdir tree
           unzip -q "$ZIP" -d tree
       - name: Run tests (manager, panel, JS, contract with the bot code)
@@ -41,10 +45,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Unpack the archive
         run: |
-          ZIP=$(ls kuni-marin-integrated*.zip | head -n 1)
+          # берём архив, который загружен в репозиторий последним (имена с номерами и пробелами не мешают)
+          ZIP=$(for f in kuni-marin-integrated*.zip; do printf '%s\t%s\n' "$(git log -1 --format=%ct -- "$f")" "$f"; done | sort -n | tail -n 1 | cut -f2-)
           echo "Archive: $ZIP"
+          ls -la kuni-marin-integrated*.zip
           mkdir tree
           unzip -q "$ZIP" -d tree
       - name: Restore AUI.BOOT deps cache
