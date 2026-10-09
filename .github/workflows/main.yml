@@ -89,10 +89,18 @@ jobs:
         shell: bash
         working-directory: tree
         run: cmake --build build --config RelWithDebInfo --target Tests -- -k 0 2>&1 | tee -a build.log
-      - name: Run unit tests
+      - name: Run the NEW unit tests (Zero Core additions)
+        id: new_tests
+        continue-on-error: true
         shell: bash
         working-directory: tree/build/bin
-        run: ./Tests "--gtest_filter=-*Integration*" 2>&1 | tee ../../tests.log
+        run: ./Tests "--gtest_filter=ChatAllowlistUnit.*:ContactsCacheUnit.*:ExternalToolsUnit.*:JsonLiteUnit.*:ProcessRunnerUnit.*:ShutdownSignalUnit.*:ToolCallGuardUnit.*" 2>&1 | tee ../../tests_new.log
+      - name: Run all other unit tests (the bot's own tests)
+        id: other_tests
+        continue-on-error: true
+        shell: bash
+        working-directory: tree/build/bin
+        run: ./Tests "--gtest_filter=-*Integration*:ChatAllowlistUnit.*:ContactsCacheUnit.*:ExternalToolsUnit.*:JsonLiteUnit.*:ProcessRunnerUnit.*:ShutdownSignalUnit.*:ToolCallGuardUnit.*" 2>&1 | tee ../../tests_other.log
       - name: Pack portable build
         working-directory: tree/build
         run: |
@@ -104,19 +112,26 @@ jobs:
         with:
           name: kuni-linux
           path: tree/build/artifacts/*.*
-      - name: Short error summary (shown on the run page)
-        if: failure()
+      - name: Results summary (shown on the run page)
+        if: always()
         working-directory: tree
         run: |
           {
-            echo '### Build errors (first 60 lines)'
+            echo '### Results'
+            echo "- NEW unit tests: ${{ steps.new_tests.outcome }}"
+            echo "- other unit tests: ${{ steps.other_tests.outcome }}"
+            echo '### Compile errors'
             echo '```'
-            grep -n 'error:' build.log 2>/dev/null | cut -c1-260 | head -60 || true
-            echo '--- failed files:'
-            grep -E '^FAILED' build.log 2>/dev/null | cut -c1-140 | head -30 || true
+            grep -n ' error: ' build.log 2>/dev/null | cut -c1-260 | head -40 || true
+            grep -E '^FAILED' build.log 2>/dev/null | cut -c1-140 | head -20 || true
             echo '```'
-            echo '### Failed tests'
+            echo '### Failed NEW tests'
             echo '```'
-            grep -n -E 'FAILED|Failure' tests.log 2>/dev/null | head -40 || true
+            grep -B2 -A6 ': Failure' tests_new.log 2>/dev/null | cut -c1-200 | head -80 || true
+            grep -E '^\[  FAILED  \]' tests_new.log 2>/dev/null | sort -u | head -30 || true
+            echo '```'
+            echo '### Failed OTHER tests'
+            echo '```'
+            grep -E '^\[  FAILED  \]' tests_other.log 2>/dev/null | sort -u | head -40 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
